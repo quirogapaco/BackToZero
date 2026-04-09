@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { Modal } from '../ui/Modal'
 import { Input } from '../ui/Input'
@@ -14,10 +14,38 @@ const INITIAL = {
   moneda: 'USD',
 }
 
-export function ProyectoModal({ open, onClose, userId, onCreated }) {
+/**
+ * ProyectoModal — crear o editar un proyecto
+ * Props:
+ *   open: boolean
+ *   onClose: () => void
+ *   userId: string
+ *   onCreated: () => void
+ *   proyecto?: object  — si se pasa, modo edición
+ *   onUpdated?: () => void
+ */
+export function ProyectoModal({ open, onClose, userId, onCreated, proyecto, onUpdated }) {
+  const isEdit = Boolean(proyecto)
   const [form, setForm] = useState(INITIAL)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+
+  // Rellenar formulario cuando estamos en modo edición
+  useEffect(() => {
+    if (open && isEdit) {
+      setForm({
+        nombre: proyecto.nombre ?? '',
+        descripcion: proyecto.descripcion ?? '',
+        monto_inversion_inicial: String(proyecto.monto_inversion_inicial ?? ''),
+        monto_respaldo_inicial: String(proyecto.monto_respaldo_inicial ?? ''),
+        moneda: proyecto.moneda ?? 'USD',
+      })
+    }
+    if (open && !isEdit) {
+      setForm(INITIAL)
+    }
+    setError(null)
+  }, [open, isEdit, proyecto])
 
   function set(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
@@ -36,22 +64,44 @@ export function ProyectoModal({ open, onClose, userId, onCreated }) {
     }
 
     setLoading(true)
-    const { error: dbError } = await supabase.from('proyectos').insert({
-      user_id: userId,
-      nombre: form.nombre.trim(),
-      descripcion: form.descripcion.trim() || null,
-      monto_inversion_inicial: Number(form.monto_inversion_inicial),
-      monto_respaldo_inicial: Number(form.monto_respaldo_inicial),
-      moneda: form.moneda,
-    })
-    setLoading(false)
 
-    if (dbError) {
-      setError(dbError.message)
+    if (isEdit) {
+      const { error: dbError } = await supabase
+        .from('proyectos')
+        .update({
+          nombre: form.nombre.trim(),
+          descripcion: form.descripcion.trim() || null,
+          monto_inversion_inicial: Number(form.monto_inversion_inicial),
+          monto_respaldo_inicial: Number(form.monto_respaldo_inicial),
+          moneda: form.moneda,
+        })
+        .eq('id', proyecto.id)
+
+      setLoading(false)
+      if (dbError) {
+        setError(dbError.message)
+      } else {
+        onUpdated?.()
+        onClose()
+      }
     } else {
-      setForm(INITIAL)
-      onCreated()
-      onClose()
+      const { error: dbError } = await supabase.from('proyectos').insert({
+        user_id: userId,
+        nombre: form.nombre.trim(),
+        descripcion: form.descripcion.trim() || null,
+        monto_inversion_inicial: Number(form.monto_inversion_inicial),
+        monto_respaldo_inicial: Number(form.monto_respaldo_inicial),
+        moneda: form.moneda,
+      })
+      setLoading(false)
+
+      if (dbError) {
+        setError(dbError.message)
+      } else {
+        setForm(INITIAL)
+        onCreated?.()
+        onClose()
+      }
     }
   }
 
@@ -62,7 +112,7 @@ export function ProyectoModal({ open, onClose, userId, onCreated }) {
   }
 
   return (
-    <Modal open={open} onClose={handleClose} title="Nuevo Proyecto">
+    <Modal open={open} onClose={handleClose} title={isEdit ? 'Editar Proyecto' : 'Nuevo Proyecto'}>
       {error && (
         <div className="mb-4 px-4 py-3 rounded-lg bg-danger/10 border border-danger/30 text-danger text-sm">
           {error}
@@ -133,7 +183,7 @@ export function ProyectoModal({ open, onClose, userId, onCreated }) {
             Cancelar
           </Button>
           <Button type="submit" loading={loading}>
-            Crear Proyecto
+            {isEdit ? 'Guardar Cambios' : 'Crear Proyecto'}
           </Button>
         </div>
       </form>

@@ -1,17 +1,31 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useProyectos } from '../../hooks/useProyectos'
 import { ProyectoCard } from '../../components/proyectos/ProyectoCard'
 import { ProyectoModal } from '../../components/proyectos/ProyectoModal'
+import { ConfirmDeleteModal } from '../../components/proyectos/ConfirmDeleteModal'
 import { Button } from '../../components/ui/Button'
 
-export function DashboardPage({ session, onSelectProyecto }) {
+export function DashboardPage({ session }) {
+  const navigate = useNavigate()
   const user = session?.user
   const { proyectos, loading, error, refetch } = useProyectos(user?.id)
+
   const [modalOpen, setModalOpen] = useState(false)
+  const [editProyecto, setEditProyecto] = useState(null)   // proyecto en edición
+  const [deleteProyecto, setDeleteProyecto] = useState(null) // proyecto a eliminar
 
   async function handleSignOut() {
     await supabase.auth.signOut()
+  }
+
+  function handleEdit(proyecto) {
+    setEditProyecto(proyecto)
+  }
+
+  function handleDelete(proyecto) {
+    setDeleteProyecto(proyecto)
   }
 
   return (
@@ -94,7 +108,9 @@ export function DashboardPage({ session, onSelectProyecto }) {
               <ProyectoCard
                 key={p.id}
                 proyecto={p}
-                onClick={onSelectProyecto}
+                onClick={(p) => navigate(`/proyecto/${p.id}/dashboard`)}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
               />
             ))}
           </div>
@@ -107,6 +123,23 @@ export function DashboardPage({ session, onSelectProyecto }) {
         onClose={() => setModalOpen(false)}
         userId={user?.id}
         onCreated={refetch}
+      />
+
+      {/* Modal editar proyecto */}
+      <ProyectoModal
+        open={Boolean(editProyecto)}
+        onClose={() => setEditProyecto(null)}
+        userId={user?.id}
+        proyecto={editProyecto}
+        onUpdated={() => { refetch(); setEditProyecto(null) }}
+      />
+
+      {/* Modal confirmar eliminación */}
+      <ConfirmDeleteModal
+        open={Boolean(deleteProyecto)}
+        onClose={() => setDeleteProyecto(null)}
+        proyecto={deleteProyecto}
+        onDeleted={() => { refetch(); setDeleteProyecto(null) }}
       />
     </div>
   )

@@ -22,10 +22,13 @@ export function useProyectoDetalle(proyectoId) {
 
       if (resError) throw resError
 
-      // 2. Últimas 5 transacciones
+      // 2. Últimas 5 transacciones (con JOIN a categorias)
       const { data: txData, error: txError } = await supabase
         .from('transacciones')
-        .select('*')
+        .select(`
+          id, tipo, monto, descripcion, afecta_meta, afecta_respaldo, fecha, categoria_id,
+          categorias ( id, nombre, icono, color )
+        `)
         .eq('proyecto_id', proyectoId)
         .order('fecha', { ascending: false })
         .limit(5)

@@ -1,25 +1,27 @@
 import { useEffect, useState } from 'react'
+import { HashRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { supabase } from './lib/supabase'
+import { CategoriasProvider } from './context/CategoriasContext'
 import { LoginPage } from './pages/auth/LoginPage'
 import { RegisterPage } from './pages/auth/RegisterPage'
 import { DashboardPage } from './pages/dashboard/DashboardPage'
-import { ProyectoPage } from './pages/proyecto/ProyectoPage'
+import { ProyectoLayout } from './pages/proyecto/ProyectoLayout'
+import { DashboardTab } from './pages/proyecto/DashboardTab'
+import { TransaccionesTab } from './pages/proyecto/TransaccionesTab'
 
-function App() {
-  const [session, setSession] = useState(undefined) // undefined = cargando
-  const [view, setView] = useState('login')            // 'login' | 'register'
-  const [proyectoActivo, setProyectoActivo] = useState(null)
+function AppRoutes() {
+  const [session, setSession] = useState(undefined)
+  const [view, setView] = useState('login')
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
-      if (!session) setProyectoActivo(null) // limpiar al logout
     })
     return () => subscription.unsubscribe()
   }, [])
 
-  // Pantalla de carga inicial
+  // Loading
   if (session === undefined) {
     return (
       <div className="min-h-screen bg-dark-bg flex items-center justify-center">
@@ -31,27 +33,41 @@ function App() {
     )
   }
 
-  // Sin sesión → Auth
+  // Sin sesión
   if (!session) {
     if (view === 'register') return <RegisterPage onNavigateToLogin={() => setView('login')} />
     return <LoginPage onNavigateToRegister={() => setView('register')} />
   }
 
-  // Sesión activa → Proyecto detalle o Dashboard
-  if (proyectoActivo) {
-    return (
-      <ProyectoPage
-        proyecto={proyectoActivo}
-        onBack={() => setProyectoActivo(null)}
-      />
-    )
-  }
-
+  // Con sesión → Router
   return (
-    <DashboardPage
-      session={session}
-      onSelectProyecto={(p) => setProyectoActivo(p)}
-    />
+    <Routes>
+      {/* Dashboard principal */}
+      <Route
+        path="/"
+        element={<DashboardPage session={session} />}
+      />
+
+      {/* Rutas de proyecto */}
+      <Route path="/proyecto/:id" element={<ProyectoLayout session={session} />}>
+        <Route index element={<Navigate to="dashboard" replace />} />
+        <Route path="dashboard"     element={<DashboardTab />} />
+        <Route path="transacciones" element={<TransaccionesTab />} />
+      </Route>
+
+      {/* Fallback */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  )
+}
+
+function App() {
+  return (
+    <HashRouter>
+      <CategoriasProvider>
+        <AppRoutes />
+      </CategoriasProvider>
+    </HashRouter>
   )
 }
 
