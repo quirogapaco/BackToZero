@@ -2,10 +2,14 @@ import { useState, useMemo } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useProyectoDetalle } from '../../hooks/useProyectoDetalle'
+import { TxItem } from '../../components/transacciones/TxItem'
 import { TransaccionModal } from '../../components/transacciones/TransaccionModal'
 import { GraficoEvolucion } from '../../components/dashboard/GraficoEvolucion'
+import { RankingGastos } from '../../components/dashboard/RankingGastos'
+import { ResumenEstadistico } from '../../components/dashboard/ResumenEstadistico'
+import { HeatmapGastos } from '../../components/dashboard/HeatmapGastos'
 import { getIconComponent } from '../../types/categorias'
-import { FiEdit2, FiTrash2, FiLoader } from 'react-icons/fi'
+import { FiEdit2, FiTrash2, FiLoader, FiChevronLeft, FiChevronRight } from 'react-icons/fi'
 
 function fmt(valor, moneda = 'USD') {
   return new Intl.NumberFormat('es-MX', {
@@ -24,8 +28,9 @@ export function DashboardTab() {
   const { proyecto } = useOutletContext()
   const { resumen, transacciones, loading, error, refetch } = useProyectoDetalle(proyecto.id)
   const [modalTipo, setModalTipo] = useState(null)
-  const [txFiltro, setTxFiltro]   = useState('RECIENTES') // 'RECIENTES' o 'HOY'
-  const [txLimit, setTxLimit]     = useState(10) // 10 o 20
+  const [txFiltro, setTxFiltro]   = useState('RECIENTES')
+  const [txLimit, setTxLimit]     = useState(10)
+  const [widgetIdx, setWidgetIdx] = useState(0) // Carousel index
   const [editTx, setEditTx]       = useState(null)
   const [deleteTx, setDeleteTx]   = useState(null)
   const [deleting, setDeleting]   = useState(false)
@@ -115,17 +120,17 @@ export function DashboardTab() {
                 </>
               ) : (
                 <>
-                  <p className="text-danger text-2xl sm:text-3xl font-extrabold truncate w-full">{fmt(pendiente, moneda)}</p>
-                  <p className="text-accent-light/40 text-xs mt-1 truncate w-full">de {fmt(inversion, moneda)} inicial</p>
+                  <p className="text-danger text-lg sm:text-2xl font-extrabold truncate w-full">{fmt(pendiente, moneda)}</p>
+                  <p className="text-accent-light/40 text-[10px] sm:text-xs mt-1 truncate w-full">de {fmt(inversion, moneda)} inicial</p>
                 </>
               )}
             </div>
             <div className="bg-dark-card border border-border-dark rounded-2xl p-4 sm:p-6 overflow-hidden">
-              <p className="text-accent-light/50 text-xs uppercase tracking-widest mb-2">Dinero Disponible</p>
-              <p className={`text-2xl sm:text-3xl font-extrabold truncate w-full ${respaldo >= 0 ? 'text-accent-light' : 'text-danger'}`}>
+              <p className="text-accent-light/50 text-[10px] sm:text-xs uppercase tracking-widest mb-2">Dinero Disponible</p>
+              <p className={`text-lg sm:text-2xl font-extrabold truncate w-full ${respaldo >= 0 ? 'text-accent-light' : 'text-danger'}`}>
                 {fmt(respaldo, moneda)}
               </p>
-              <p className="text-accent-light/40 text-xs mt-1 truncate w-full">Respaldo actual del proyecto</p>
+              <p className="text-accent-light/40 text-[10px] sm:text-xs mt-1 truncate w-full">Respaldo proyecto</p>
             </div>
           </div>
 
@@ -150,8 +155,61 @@ export function DashboardTab() {
             </div>
           </div>
 
-          {/* Gráfico de Evolución */}
-          <GraficoEvolucion proyectoId={proyecto.id} moneda={moneda} />
+          {/* === WIDGET CAROUSEL === */}
+          {(() => {
+            const WIDGETS = [
+              { label: 'Tendencia', comp: <GraficoEvolucion    key="grafico"  proyectoId={proyecto.id} moneda={moneda} /> },
+              { label: 'Resumen',   comp: <ResumenEstadistico  key="resumen"  proyectoId={proyecto.id} moneda={moneda} /> },
+              { label: 'Ranking',   comp: <RankingGastos       key="ranking"  proyectoId={proyecto.id} moneda={moneda} /> },
+              { label: 'Calendario',comp: <HeatmapGastos       key="heatmap"  proyectoId={proyecto.id} moneda={moneda} /> },
+            ]
+            const prev = () => setWidgetIdx(i => Math.max(0, i - 1))
+            const next = () => setWidgetIdx(i => Math.min(WIDGETS.length - 1, i + 1))
+            return (
+              <div className="mt-4 sm:mt-6">
+                {/* Contenido activo */}
+                {WIDGETS[widgetIdx].comp}
+
+                {/* Controles */}
+                <div className="flex items-center justify-center mt-4 gap-4">
+                  <button
+                    onClick={prev}
+                    disabled={widgetIdx === 0}
+                    className="p-2 rounded-full border border-border-dark/50 text-accent-light/40 hover:text-accent hover:border-accent disabled:opacity-20 transition-all"
+                  >
+                    <FiChevronLeft size={16} />
+                  </button>
+
+                  {/* Dot indicators */}
+                  <div className="flex gap-2 items-center">
+                    {WIDGETS.map((w, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setWidgetIdx(i)}
+                        title={w.label}
+                        className={`transition-all duration-300 rounded-full ${
+                          i === widgetIdx
+                            ? 'bg-accent w-5 h-2'
+                            : 'bg-accent-light/20 w-2 h-2 hover:bg-accent-light/40'
+                        }`}
+                      />
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={next}
+                    disabled={widgetIdx === WIDGETS.length - 1}
+                    className="p-2 rounded-full border border-border-dark/50 text-accent-light/40 hover:text-accent hover:border-accent disabled:opacity-20 transition-all"
+                  >
+                    <FiChevronRight size={16} />
+                  </button>
+                </div>
+                <p className="text-center text-accent-light/20 text-[10px] mt-1">
+                  {WIDGETS[widgetIdx].label} · {widgetIdx + 1} / {WIDGETS.length}
+                </p>
+              </div>
+            )
+          })()}
 
           {/* Contenedor Movimientos */}
           <div className="bg-dark-card border border-border-dark rounded-2xl overflow-hidden shadow-lg mt-6">
@@ -278,68 +336,5 @@ export function DashboardTab() {
         </div>
       )}
     </div>
-  )
-}
-
-/* ── Item de transacción ── */
-function TxItem({ tx, moneda, onEdit, onDelete }) {
-  const isIngreso = tx.tipo === 'INGRESO'
-  const cat = tx.categorias
-  const IconComp = cat ? getIconComponent(cat.icono) : null
-
-  return (
-    <li className="px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 hover:bg-dark-surface/50 transition-colors duration-150 group">
-      {/* Izquierda — tipo + info */}
-      <div className="flex items-center gap-3 min-w-0 flex-1">
-        {/* Indicador tipo */}
-        <span className={`text-xl flex-shrink-0 ${isIngreso ? 'text-accent' : 'text-danger'}`}>
-          {isIngreso ? '↑' : '↓'}
-        </span>
-
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-accent-light text-xs sm:text-sm font-medium truncate">
-              {tx.descripcion || (isIngreso ? 'Ingreso' : 'Gasto')}
-            </p>
-            {/* Badge categoría */}
-            {cat && (
-              <span
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium flex-shrink-0"
-                style={{ backgroundColor: cat.color + '22', color: cat.color, border: `1px solid ${cat.color}40` }}
-              >
-                {IconComp && <IconComp size={10} />}
-                {cat.nombre}
-              </span>
-            )}
-          </div>
-          <p className="text-accent-light/30 text-xs mt-0.5">{fmtFecha(tx.fecha)}</p>
-        </div>
-      </div>
-
-      {/* Derecha — monto + acciones */}
-      <div className="flex items-center gap-2 flex-shrink-0">
-        <span className={`font-bold text-xs sm:text-sm ${isIngreso ? 'text-accent' : 'text-danger'}`}>
-          {isIngreso ? '+' : '-'}{fmt(tx.monto, moneda)}
-        </span>
-
-        {/* Botones: siempre visibles en móvil, hover en desktop */}
-        <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-200">
-          <button
-            onClick={onEdit}
-            title="Editar"
-            className="p-1.5 rounded-lg text-accent-light/30 hover:text-accent hover:bg-accent/10 transition-colors"
-          >
-            <FiEdit2 size={14} />
-          </button>
-          <button
-            onClick={onDelete}
-            title="Eliminar"
-            className="p-1.5 rounded-lg text-accent-light/30 hover:text-danger hover:bg-danger/10 transition-colors"
-          >
-            <FiTrash2 size={14} />
-          </button>
-        </div>
-      </div>
-    </li>
   )
 }
