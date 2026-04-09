@@ -22,7 +22,7 @@ export function useProyectoDetalle(proyectoId) {
 
       if (resError) throw resError
 
-      // 2. Últimas 5 transacciones (con JOIN a categorias)
+      // 2. Últimas 50 transacciones (con JOIN a categorias)
       const { data: txData, error: txError } = await supabase
         .from('transacciones')
         .select(`
@@ -31,7 +31,7 @@ export function useProyectoDetalle(proyectoId) {
         `)
         .eq('proyecto_id', proyectoId)
         .order('fecha', { ascending: false })
-        .limit(5)
+        .limit(50)
 
       if (txError) throw txError
 
