@@ -7,21 +7,33 @@
  *   onDelete: (proyecto) => void
  */
 
-function fmt(valor, moneda = 'USD') {
-  return new Intl.NumberFormat('es-MX', {
-    style: 'currency',
-    currency: moneda || 'USD',
+import { FiEdit2, FiTrash2 } from "react-icons/fi";
+
+function fmt(valor, moneda = "USD") {
+  return new Intl.NumberFormat("es-MX", {
+    style: "currency",
+    currency: moneda || "USD",
     maximumFractionDigits: 2,
-  }).format(valor ?? 0)
+  }).format(valor ?? 0);
 }
 
 export function ProyectoCard({ proyecto, onClick, onEdit, onDelete }) {
-  const { nombre, descripcion, monto_inversion_inicial, monto_respaldo_inicial, moneda, pendiente } = proyecto
+  const {
+    nombre,
+    descripcion,
+    monto_inversion_inicial,
+    monto_respaldo_inicial,
+    moneda,
+    pendiente,
+  } = proyecto;
   const porcentajeRecuperado = Math.min(
     100,
-    Math.max(0, ((monto_inversion_inicial - pendiente) / monto_inversion_inicial) * 100)
-  )
-  const recuperado = isFinite(porcentajeRecuperado) ? porcentajeRecuperado : 0
+    Math.max(
+      0,
+      ((monto_inversion_inicial - pendiente) / monto_inversion_inicial) * 100,
+    ),
+  );
+  const recuperado = isFinite(porcentajeRecuperado) ? porcentajeRecuperado : 0;
 
   return (
     <div className="relative group">
@@ -37,19 +49,29 @@ export function ProyectoCard({ proyecto, onClick, onEdit, onDelete }) {
             {nombre}
           </h3>
           {descripcion && (
-            <p className="text-accent-light/40 text-xs mt-1 line-clamp-2">{descripcion}</p>
+            <p className="text-accent-light/40 text-xs mt-1 line-clamp-2">
+              {descripcion}
+            </p>
           )}
         </div>
 
         {/* Montos */}
         <div className="grid grid-cols-2 gap-2 sm:gap-3">
           <div className="bg-dark-bg rounded-xl p-2.5 sm:p-3">
-            <p className="text-accent-light/40 text-[10px] sm:text-xs mb-1">Inversión inicial</p>
-            <p className="text-accent-light font-semibold text-xs sm:text-sm">{fmt(monto_inversion_inicial, moneda)}</p>
+            <p className="text-accent-light/40 text-[10px] sm:text-xs mb-1">
+              Inversión inicial
+            </p>
+            <p className="text-accent-light font-semibold text-xs sm:text-sm">
+              {fmt(monto_inversion_inicial, moneda)}
+            </p>
           </div>
           <div className="bg-dark-bg rounded-xl p-2.5 sm:p-3">
-            <p className="text-accent-light/40 text-[10px] sm:text-xs mb-1">Respaldo inicial</p>
-            <p className="text-accent-light font-semibold text-xs sm:text-sm">{fmt(monto_respaldo_inicial, moneda)}</p>
+            <p className="text-accent-light/40 text-[10px] sm:text-xs mb-1">
+              Respaldo inicial
+            </p>
+            <p className="text-accent-light font-semibold text-xs sm:text-sm">
+              {fmt(monto_respaldo_inicial, moneda)}
+            </p>
           </div>
         </div>
 
@@ -57,8 +79,10 @@ export function ProyectoCard({ proyecto, onClick, onEdit, onDelete }) {
         <div>
           <div className="flex items-center justify-between mb-2">
             <span className="text-accent-light/50 text-xs">Pendiente</span>
-            <span className={`text-xs font-bold ${pendiente <= 0 ? 'text-accent' : 'text-accent-light'}`}>
-              {pendiente <= 0 ? '¡Recuperado! 🎉' : fmt(pendiente, moneda)}
+            <span
+              className={`text-xs font-bold ${pendiente <= 0 ? "text-accent" : "text-accent-light"}`}
+            >
+              {pendiente <= 0 ? "¡Recuperado! 🎉" : fmt(pendiente, moneda)}
             </span>
           </div>
           <div className="h-1.5 bg-dark-bg rounded-full overflow-hidden">
@@ -67,7 +91,9 @@ export function ProyectoCard({ proyecto, onClick, onEdit, onDelete }) {
               style={{ width: `${recuperado}%` }}
             />
           </div>
-          <p className="text-accent-light/30 text-xs mt-1 text-right">{recuperado.toFixed(0)}% recuperado</p>
+          <p className="text-accent-light/30 text-xs mt-1 text-right">
+            {recuperado.toFixed(0)}% recuperado
+          </p>
         </div>
       </button>
 
@@ -76,29 +102,37 @@ export function ProyectoCard({ proyecto, onClick, onEdit, onDelete }) {
         - Móvil: siempre visibles (opacity-100)
         - Desktop: solo en hover del group (sm:opacity-0 sm:group-hover:opacity-100)
       */}
-      <div className="absolute top-3 right-3 flex items-center gap-1.5
-                      opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-200">
+      <div
+        className="absolute top-3 right-3 flex items-center gap-1.5
+                      opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-200"
+      >
         <button
-          onClick={(e) => { e.stopPropagation(); onEdit(proyecto) }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit(proyecto);
+          }}
           title="Editar proyecto"
           className="w-8 h-8 flex items-center justify-center rounded-lg
                      bg-dark-bg border border-border-dark
                      text-accent-light/50 hover:text-accent hover:border-accent
                      transition-colors duration-200 text-sm"
         >
-          ✏️
+          <FiEdit2 size={14} />
         </button>
         <button
-          onClick={(e) => { e.stopPropagation(); onDelete(proyecto) }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(proyecto);
+          }}
           title="Eliminar proyecto"
           className="w-8 h-8 flex items-center justify-center rounded-lg
                      bg-dark-bg border border-border-dark
                      text-accent-light/50 hover:text-danger hover:border-danger
                      transition-colors duration-200 text-sm"
         >
-          🗑️
+          <FiTrash2 size={14} />
         </button>
       </div>
     </div>
-  )
+  );
 }
