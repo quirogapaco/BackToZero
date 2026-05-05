@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useTransacciones } from '../../hooks/useTransacciones'
 import { FiltrosTransacciones } from '../../components/transacciones/FiltrosTransacciones'
 import { TransaccionModal } from '../../components/transacciones/TransaccionModal'
 import { getIconComponent } from '../../types/categorias'
-import { FiEdit2, FiTrash2, FiLoader } from 'react-icons/fi'
+import { FiEdit2, FiTrash2, FiLoader, FiCheckSquare, FiX } from 'react-icons/fi'
 
 function fmt(valor, moneda = 'USD') {
   return new Intl.NumberFormat('es-MX', {
@@ -35,6 +35,9 @@ export function TransaccionesTab() {
   const [deleteTx, setDeleteTx]   = useState(null)
   const [deleting, setDeleting]   = useState(false)
   const [deleteError, setDeleteError] = useState(null)
+  // Selección de transacciones
+  const [seleccionMode, setSeleccionMode] = useState(false)
+  const [selectedIds, setSelectedIds]     = useState(new Set())
 
   async function handleDelete() {
     if (!deleteTx) return
@@ -47,6 +50,57 @@ export function TransaccionesTab() {
     refetch()
   }
 
+  function toggleSeleccionMode() {
+    setSeleccionMode((v) => !v)
+    setSelectedIds(new Set())
+  }
+
+  function toggleSelect(id) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function selectAll() {
+    setSelectedIds(new Set(transacciones.map((tx) => tx.id)))
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set())
+  }
+
+  // Cálculos del resumen de selección
+  const seleccionadas = useMemo(
+    () => transacciones.filter((tx) => selectedIds.has(tx.id)),
+    [transacciones, selectedIds],
+  )
+
+  const resumenSeleccion = useMemo(() => {
+    let totalIngresos = 0
+    let totalGastos = 0
+    const porCategoria = {}
+
+    seleccionadas.forEach((tx) => {
+      const monto = Number(tx.monto || 0)
+      if (tx.tipo === 'INGRESO') {
+        totalIngresos += monto
+      } else {
+        totalGastos += monto
+      }
+      const catKey = tx.categorias ? tx.categorias.nombre : 'Sin categoría'
+      if (!porCategoria[catKey]) {
+        porCategoria[catKey] = { nombre: catKey, ingreso: 0, gasto: 0, color: tx.categorias?.color }
+      }
+      tx.tipo === 'INGRESO'
+        ? (porCategoria[catKey].ingreso += monto)
+        : (porCategoria[catKey].gasto += monto)
+    })
+
+    return { totalIngresos, totalGastos, neto: totalIngresos - totalGastos, porCategoria: Object.values(porCategoria) }
+  }, [seleccionadas])
+
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-5 sm:py-8 space-y-5">
 
@@ -58,7 +112,18 @@ export function TransaccionesTab() {
             {transacciones.length} movimiento{transacciones.length !== 1 ? 's' : ''} cargado{transacciones.length !== 1 ? 's' : ''}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={toggleSeleccionMode}
+            className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold transition-colors duration-200 border
+              ${seleccionMode
+                ? 'bg-accent/10 border-accent text-accent'
+                : 'bg-dark-card border-border-dark text-accent-light/60 hover:border-accent/50 hover:text-accent-light'
+              }`}
+          >
+            <FiCheckSquare size={15} />
+            {seleccionMode ? 'Cancelar' : 'Seleccionar'}
+          </button>
           <button
             onClick={() => { setEditTx(null); setModalTipo('INGRESO') }}
             className="flex items-center gap-1.5 bg-accent hover:bg-accent-hover text-dark-bg font-bold
@@ -111,12 +176,40 @@ export function TransaccionesTab() {
             </div>
           ) : (
             <div className="bg-dark-card border border-border-dark rounded-2xl overflow-hidden">
+              {/* Barra de selección cuando hay modo activo */}
+              {seleccionMode && (
+                <div className="px-4 sm:px-6 py-2.5 bg-accent/5 border-b border-accent/20 flex items-center justify-between gap-2 text-xs">
+                  <span className="text-accent-light/60">
+                    {selectedIds.size} seleccionada{selectedIds.size !== 1 ? 's' : ''}
+                  </span>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={selectAll}
+                      className="text-accent hover:underline font-medium"
+                    >
+                      Seleccionar todas
+                    </button>
+                    {selectedIds.size > 0 && (
+                      <button
+                        onClick={clearSelection}
+                        className="flex items-center gap-1 text-accent-light/40 hover:text-danger font-medium"
+                      >
+                        <FiX size={11} /> Limpiar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <ul className="divide-y divide-border-dark/40">
                 {transacciones.map((tx) => (
                   <TxItem
                     key={tx.id}
                     tx={tx}
                     moneda={moneda}
+                    seleccionMode={seleccionMode}
+                    isSelected={selectedIds.has(tx.id)}
+                    onToggleSelect={() => toggleSelect(tx.id)}
                     onEdit={() => { setEditTx(tx); setModalTipo(tx.tipo) }}
                     onDelete={() => setDeleteTx(tx)}
                   />
@@ -144,6 +237,123 @@ export function TransaccionesTab() {
             </div>
           )}
         </>
+      )}
+
+      {/* Tabla resumen de transacciones seleccionadas */}
+      {seleccionMode && selectedIds.size > 0 && (
+        <div className="bg-dark-card border border-accent/30 rounded-2xl overflow-hidden shadow-lg shadow-accent/5">
+          {/* Header de la tabla */}
+          <div className="px-4 sm:px-6 py-3 border-b border-border-dark/50 flex items-center justify-between">
+            <div>
+              <h2 className="text-accent-light font-semibold text-sm">
+                Resumen de selección
+              </h2>
+              <p className="text-accent-light/40 text-xs mt-0.5">
+                {selectedIds.size} transacción{selectedIds.size !== 1 ? 'es' : ''} seleccionada{selectedIds.size !== 1 ? 's' : ''}
+              </p>
+            </div>
+            <button
+              onClick={clearSelection}
+              className="p-1.5 rounded-lg text-accent-light/30 hover:text-danger hover:bg-danger/10 transition-colors"
+              title="Limpiar selección"
+            >
+              <FiX size={15} />
+            </button>
+          </div>
+
+          {/* Tabla detallada */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-border-dark/50 bg-dark-bg/40">
+                  <th className="px-4 sm:px-6 py-2.5 text-left text-accent-light/40 font-semibold uppercase tracking-wider">Descripción</th>
+                  <th className="px-3 py-2.5 text-left text-accent-light/40 font-semibold uppercase tracking-wider hidden sm:table-cell">Categoría</th>
+                  <th className="px-3 py-2.5 text-left text-accent-light/40 font-semibold uppercase tracking-wider hidden sm:table-cell">Fecha</th>
+                  <th className="px-4 sm:px-6 py-2.5 text-right text-accent-light/40 font-semibold uppercase tracking-wider">Monto</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border-dark/30">
+                {seleccionadas.map((tx) => {
+                  const isIngreso = tx.tipo === 'INGRESO'
+                  const cat = tx.categorias
+                  return (
+                    <tr key={tx.id} className="hover:bg-dark-surface/30 transition-colors">
+                      <td className="px-4 sm:px-6 py-2.5">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-base flex-shrink-0 ${isIngreso ? 'text-accent' : 'text-danger'}`}>
+                            {isIngreso ? '↑' : '↓'}
+                          </span>
+                          <span className="text-accent-light font-medium truncate max-w-[140px] sm:max-w-none">
+                            {tx.descripcion || (isIngreso ? 'Ingreso' : 'Gasto')}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2.5 hidden sm:table-cell">
+                        {cat ? (
+                          <span
+                            className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium"
+                            style={{ backgroundColor: cat.color + '22', color: cat.color, border: `1px solid ${cat.color}40` }}
+                          >
+                            {cat.nombre}
+                          </span>
+                        ) : (
+                          <span className="text-accent-light/30">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5 text-accent-light/40 hidden sm:table-cell whitespace-nowrap">
+                        {fmtFecha(tx.fecha)}
+                      </td>
+                      <td className={`px-4 sm:px-6 py-2.5 text-right font-bold ${isIngreso ? 'text-accent' : 'text-danger'}`}>
+                        {isIngreso ? '+' : '-'}{fmt(tx.monto, moneda)}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Totales */}
+          <div className="border-t border-border-dark/50 bg-dark-bg/40 px-4 sm:px-6 py-3 space-y-1.5">
+            {resumenSeleccion.porCategoria.length > 1 && (
+              <div className="pb-2 mb-1 border-b border-border-dark/40 space-y-1">
+                <p className="text-[10px] font-semibold text-accent-light/40 uppercase tracking-widest mb-1">Por categoría</p>
+                {resumenSeleccion.porCategoria.map((cat) => (
+                  <div key={cat.nombre} className="flex items-center justify-between text-xs">
+                    <span
+                      className="font-medium"
+                      style={{ color: cat.color || 'rgba(176,228,204,0.7)' }}
+                    >
+                      {cat.nombre}
+                    </span>
+                    <div className="flex gap-3">
+                      {cat.ingreso > 0 && (
+                        <span className="text-accent">+{fmt(cat.ingreso, moneda)}</span>
+                      )}
+                      {cat.gasto > 0 && (
+                        <span className="text-danger">-{fmt(cat.gasto, moneda)}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex justify-between text-xs">
+              <span className="text-accent-light/50">Total ingresos</span>
+              <span className="text-accent font-bold">+{fmt(resumenSeleccion.totalIngresos, moneda)}</span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-accent-light/50">Total gastos</span>
+              <span className="text-danger font-bold">-{fmt(resumenSeleccion.totalGastos, moneda)}</span>
+            </div>
+            <div className="flex justify-between text-sm pt-1 border-t border-border-dark/40 mt-1">
+              <span className="text-accent-light font-semibold">Neto</span>
+              <span className={`font-extrabold ${resumenSeleccion.neto >= 0 ? 'text-accent' : 'text-danger'}`}>
+                {resumenSeleccion.neto >= 0 ? '+' : ''}{fmt(resumenSeleccion.neto, moneda)}
+              </span>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Modal crear / editar */}
@@ -200,19 +410,36 @@ export function TransaccionesTab() {
 }
 
 /* ── Item de transacción ── */
-function TxItem({ tx, moneda, onEdit, onDelete }) {
+function TxItem({ tx, moneda, seleccionMode, isSelected, onToggleSelect, onEdit, onDelete }) {
   const isIngreso = tx.tipo === 'INGRESO'
   const cat = tx.categorias
   const IconComp = cat ? getIconComponent(cat.icono) : null
 
   return (
-    <li className="px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 hover:bg-dark-surface/50 transition-colors duration-150 group">
-      {/* Izquierda — tipo + info */}
+    <li
+      className={`px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 transition-colors duration-150 group
+        ${seleccionMode ? 'cursor-pointer' : ''}
+        ${isSelected ? 'bg-accent/5' : 'hover:bg-dark-surface/50'}`}
+      onClick={seleccionMode ? onToggleSelect : undefined}
+    >
+      {/* Izquierda — checkbox (modo selección) o indicador tipo */}
       <div className="flex items-center gap-3 min-w-0 flex-1">
-        {/* Indicador tipo */}
-        <span className={`text-xl flex-shrink-0 ${isIngreso ? 'text-accent' : 'text-danger'}`}>
-          {isIngreso ? '↑' : '↓'}
-        </span>
+        {seleccionMode ? (
+          <span
+            className={`flex-shrink-0 w-4 h-4 rounded border-2 flex items-center justify-center transition-colors duration-150
+              ${isSelected ? 'bg-accent border-accent' : 'border-border-dark bg-transparent'}`}
+          >
+            {isSelected && (
+              <svg viewBox="0 0 10 8" className="w-2.5 h-2.5 fill-dark-bg" xmlns="http://www.w3.org/2000/svg">
+                <path d="M1 4l2.5 2.5L9 1" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
+          </span>
+        ) : (
+          <span className={`text-xl flex-shrink-0 ${isIngreso ? 'text-accent' : 'text-danger'}`}>
+            {isIngreso ? '↑' : '↓'}
+          </span>
+        )}
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
@@ -240,23 +467,25 @@ function TxItem({ tx, moneda, onEdit, onDelete }) {
           {isIngreso ? '+' : '-'}{fmt(tx.monto, moneda)}
         </span>
 
-        {/* Botones: siempre visibles en móvil, hover en desktop */}
-        <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-200">
-          <button
-            onClick={onEdit}
-            title="Editar"
-            className="p-1.5 rounded-lg text-accent-light/30 hover:text-accent hover:bg-accent/10 transition-colors"
-          >
-            <FiEdit2 size={14} />
-          </button>
-          <button
-            onClick={onDelete}
-            title="Eliminar"
-            className="p-1.5 rounded-lg text-accent-light/30 hover:text-danger hover:bg-danger/10 transition-colors"
-          >
-            <FiTrash2 size={14} />
-          </button>
-        </div>
+        {/* Botones: ocultos en modo selección */}
+        {!seleccionMode && (
+          <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-200">
+            <button
+              onClick={onEdit}
+              title="Editar"
+              className="p-1.5 rounded-lg text-accent-light/30 hover:text-accent hover:bg-accent/10 transition-colors"
+            >
+              <FiEdit2 size={14} />
+            </button>
+            <button
+              onClick={onDelete}
+              title="Eliminar"
+              className="p-1.5 rounded-lg text-accent-light/30 hover:text-danger hover:bg-danger/10 transition-colors"
+            >
+              <FiTrash2 size={14} />
+            </button>
+          </div>
+        )}
       </div>
     </li>
   )
